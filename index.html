@@ -1,279 +1,212 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EarPeace: Music Player</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Custom styles to ensure the player looks centered and responsive */
-        #progress-bar-container {
-            height: 8px;
-            background-color: #374151; /* Gray-700 */
-            border-radius: 9999px;
-            cursor: pointer;
-        }
+<script>
+    // --- Initialization and State ---
+    const audio = new Audio();
+    let isPlaying = false;
+    let currentTrackIndex = 0;
+    
+    // Placeholder tracks using external URLs since local files cannot be embedded.
+    // NOTE: The local file uploaded by the user will be prepended to this list.
+    const playlist = [
+        { title: "Ocean Breeze", artist: "Placeholder Track 1", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", isPlaceholder: true },
+        { title: "Ambient Journey", artist: "Placeholder Track 2", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", isPlaceholder: true },
+        { title: "Cinematic Build-up", artist: "Placeholder Track 3", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", isPlaceholder: true }
+    ];
 
-        #progress-bar {
-            height: 100%;
-            width: 0%;
-            background-color: #0EA5E9; /* Sky-500 for a calmer tone */
-            border-radius: 9999px;
-            transition: width 0.1s linear;
-        }
+    // --- DOM Elements (omitted for brevity) ---
+    // ... (Your existing DOM element definitions)
+    const songTitleEl = document.getElementById('song-title');
+    const songArtistEl = document.getElementById('song-artist');
+    const playPauseBtn = document.getElementById('play-pause-btn');
+    const playIcon = document.getElementById('play-icon');
+    const pauseIcon = document.getElementById('pause-icon');
+    const prevBtn = document.getElementById('prev-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const currentTimeEl = document.getElementById('current-time');
+    const durationEl = document.getElementById('duration');
+    const progressBarContainer = document.getElementById('progress-bar-container');
+    const progressBar = document.getElementById('progress-bar');
+    const fileInput = document.getElementById('audio-file-input');
+    const fileStatusEl = document.getElementById('file-status');
+    const albumIcon = document.getElementById('album-icon');
+    const volumeSlider = document.getElementById('volume-slider');
 
-        /* Set default font to Inter */
-        body {
-            font-family: 'Inter', sans-serif;
-        }
+
+    // --- Helper Functions (omitted for brevity) ---
+    // ... (Your existing formatTime function)
+    function formatTime(seconds) {
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    // ... (Your existing updateUI function)
+    function updateUI(track) {
+        songTitleEl.textContent = track.title;
+        songArtistEl.textContent = track.artist;
+        // Reset progress bar display
+        currentTimeEl.textContent = '0:00';
+        durationEl.textContent = '0:00';
+        progressBar.style.width = '0%';
+    }
+
+    // --- Core Player Functions (omitted for brevity) ---
+    // ... (Your existing loadTrack, togglePlayPause, nextTrack, prevTrack, updatePlayPauseIcon functions)
+    function loadTrack(track) {
+        audio.src = track.src;
+        audio.load();
+        updateUI(track);
         
-        /* Visually hide the file input but keep it accessible for the "Load Your Own MP3" label */
-        #audio-file-input {
-            width: 0.1px;
-            height: 0.1px;
-            opacity: 0;
-            overflow: hidden;
-            position: absolute;
-            z-index: -1;
+        // Show album icon for placeholder tracks, hide otherwise
+        if (track.isPlaceholder) {
+            albumIcon.classList.remove('hidden');
+        } else {
+            albumIcon.classList.add('hidden'); 
         }
+    }
+
+    function togglePlayPause() {
+        if (audio.paused) {
+            audio.play().catch(error => {
+                console.error("Autoplay failed or player not ready:", error);
+                fileStatusEl.textContent = "Playback blocked. Please interact with the player first.";
+            });
+        } else {
+            audio.pause();
+        }
+        isPlaying = !audio.paused;
+        updatePlayPauseIcon();
+    }
+
+    function nextTrack() {
+        currentTrackIndex = (currentTrackIndex + 1) % playlist.length;
+        loadTrack(playlist[currentTrackIndex]);
+        if (isPlaying) {
+            audio.play();
+        }
+    }
+
+    function prevTrack() {
+        currentTrackIndex = (currentTrackIndex - 1 + playlist.length) % playlist.length;
+        loadTrack(playlist[currentTrackIndex]);
+        if (isPlaying) {
+            audio.play();
+        }
+    }
+
+    function updatePlayPauseIcon() {
+        if (isPlaying) {
+            playIcon.style.display = 'none';
+            pauseIcon.style.display = 'block';
+        } else {
+            playIcon.style.display = 'block';
+            pauseIcon.style.display = 'none';
+        }
+    }
+
+
+    // --- Event Listeners and Audio Handling ---
+
+    // 1. Play/Pause Button
+    playPauseBtn.addEventListener('click', togglePlayPause);
+    
+    // 2. Next/Previous Buttons
+    nextBtn.addEventListener('click', nextTrack);
+    prevBtn.addEventListener('click', prevTrack);
+
+    // 3. Audio Time Updates (updates progress bar and time display)
+    audio.addEventListener('timeupdate', () => {
+        const duration = audio.duration;
+        const currentTime = audio.currentTime;
+
+        if (isFinite(duration) && duration > 0) {
+            const progressPercent = (currentTime / duration) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+            currentTimeEl.textContent = formatTime(currentTime);
+        }
+    });
+
+    // 4. Audio Metadata Loaded (updates duration once metadata is available)
+    audio.addEventListener('loadedmetadata', () => {
+        if (isFinite(audio.duration)) {
+            durationEl.textContent = formatTime(audio.duration);
+        }
+    });
+
+    // 5. Audio Ended (automatically plays next track)
+    audio.addEventListener('ended', nextTrack);
+
+    // 6. Progress Bar Click (allows seeking)
+    progressBarContainer.addEventListener('click', (e) => {
+        const width = progressBarContainer.clientWidth;
+        const clickX = e.offsetX;
+        const duration = audio.duration;
         
-        /* Style for the Play/Pause button for smooth interaction */
-        #play-pause-btn svg {
-            transition: transform 0.2s;
+        if (isFinite(duration) && duration > 0) {
+            audio.currentTime = (clickX / width) * duration;
         }
-        #play-pause-btn:hover svg {
-            transform: scale(1.1);
-        }
+    });
 
-        /* Custom styling for the volume slider thumb to match the theme */
-        #volume-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: #0EA5E9; /* Sky-500 */
-            cursor: pointer;
-        }
-        
-        #volume-slider::-moz-range-thumb {
-            width: 14px;
-            height: 14px;
-            border: 0;
-            border-radius: 50%;
-            background: #0EA5E9; /* Sky-500 */
-            cursor: pointer;
-        }
-    </style>
-</head>
-<body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+    // 7. Volume Slider
+    volumeSlider.addEventListener('input', (e) => {
+        audio.volume = e.target.value;
+    });
 
-    <div id="player-container" class="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-2xl transition-all duration-300">
-        <h1 class="text-3xl font-extrabold mb-6 text-center text-sky-400">EarPeace</h1>
+    // 8. FILE INPUT CHANGE (***THE CORRECTED PART***)
+    fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
 
-        <div class="mb-6 flex flex-col items-center">
-            <input type="file" id="audio-file-input" accept="audio/*">
-            <label for="audio-file-input" class="cursor-pointer bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-6 rounded-xl shadow-lg transition duration-300 text-sm md:text-base">
-                Load Your Own MP3
-            </label>
-            <p id="file-status" class="mt-2 text-xs text-gray-400 italic">No file loaded.</p>
-        </div>
-
-        <div class="w-48 h-48 mx-auto bg-gray-700 rounded-xl mb-6 flex items-center justify-center shadow-inner overflow-hidden">
-            <svg id="album-icon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-24 h-24 text-gray-500">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 9l10.5-3m0 6l-4.5 4.5M21 9v10.5a2.25 2.25 0 01-2.25 2.25H4.5a2.25 2.25 0 01-2.25-2.25V9m19.5-3a2.25 2.25 0 00-2.25-2.25H6.375a2.25 2.25 0 00-2.25 2.25M9 12.75h.008v.008H9v-.008zm.008 3.75H9v.008h.008v-.008zm2.25-5.625h.008v.008h-.008v-.008z" />
-            </svg>
-        </div>
-        
-        <div class="text-center mb-6">
-            <p id="song-title" class="text-xl font-bold truncate">Welcome to EarPeace!</p>
-            <p id="song-artist" class="text-sm text-gray-400">Load a song to start.</p>
-        </div>
-
-        <div class="mb-4">
-            <div id="progress-bar-container">
-                <div id="progress-bar"></div>
-            </div>
-            <div class="flex justify-between text-xs mt-2 text-gray-400">
-                <span id="current-time">0:00</span>
-                <span id="duration">0:00</span>
-            </div>
-        </div>
-
-        <div class="flex justify-center items-center space-x-6">
-            <button id="prev-btn" class="text-gray-400 hover:text-sky-400 p-2 rounded-full transition duration-150" aria-label="Previous Track">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-                    <path fill-rule="evenodd" d="M20.25 4.5a.75.75 0 01.75.75v14.75a.75.75 0 01-1.5 0V12h-4.5v7.5a.75.75 0 01-1.5 0v-7.5H5.25v7.5a.75.75 0 01-1.5 0v-15a.75.75 0 011.5 0V9h4.5V4.5a.75.75 0 011.5 0V9h4.5V4.5a.75.75 0 01.75-.75z" clip-rule="evenodd" />
-                </svg>
-            </button>
-
-            <button id="play-pause-btn" class="relative bg-sky-500 hover:bg-sky-600 p-4 rounded-full shadow-lg shadow-sky-500/50 transition duration-300 transform active:scale-95" aria-label="Play or Pause">
-                <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 text-white transition-opacity duration-200">
-                    <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.38 2.872-1.628l11.474 6.153a1.125 1.125 0 010 2.016l-11.474 6.153a1.125 1.125 0 01-1.638-.75V5.653z" clip-rule="evenodd" />
-                </svg>
-                <svg id="pause-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 text-white absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 transition-opacity duration-200" style="display: none;">
-                    <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clip-rule="evenodd" />
-                </svg>
-            </button>
-            
-            <button id="next-btn" class="text-gray-400 hover:text-sky-400 p-2 rounded-full transition duration-150" aria-label="Next Track">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6">
-                    <path fill-rule="evenodd" d="M4.5 4.5A.75.75 0 015.25 3h13.5a.75.75 0 01.75.75v15a.75.75 0 01-.75.75H5.25a.75.75 0 01-.75-.75V4.5zm5.56 9.47a.75.75 0 010-1.06l3.75-3.75a.75.75 0 011.06 0l3.75 3.75a.75.75 0 01-1.06 1.06l-3.22-3.22-3.22 3.22a.75.75 0 01-1.06 0z" clip-rule="evenodd" />
-                    <path d="M12 9.75a.75.75 0 01.75-.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75H12.75a.75.75 0 01-.75-.75V9.75z" />
-                </svg>
-            </button>
-        </div>
-        
-        <div class="flex items-center space-x-4 mt-6 pt-4 border-t border-gray-700">
-            <svg id="volume-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 text-gray-400">
-                <path d="M13.5 4.062c0-1.426-1.529-2.38-2.872-1.628L6.928 4.903A.75.75 0 006 5.438v13.5c0 .535.45.968.928 1.104l3.7-.872a.75.75 0 00.573-.243 45.45 45.45 0 00.354-.383l4.595-4.041c1.242-1.096 1.258-2.923.047-4.032l-4.595-4.041a.75.75 0 00-.354-.383l-3.7-.872A1.5 1.5 0 0013.5 4.062z" />
-                <path d="M18.75 14.25c0 1.242-.705 2.298-1.756 2.766a3.501 3.501 0 01-3.955-.136L9.75 13.5V11.25l3.394-2.827a3.501 3.501 0 013.955-.136C18.045 9.952 18.75 11.008 18.75 12.25v2.001z" />
-            </svg>
-            <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1" class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-sky-500">
-        </div>
-
-    </div>
-
-    <script>
-        // --- Initialization and State ---
-        const audio = new Audio();
-        let isPlaying = false;
-        let currentTrackIndex = 0;
-        
-        // Placeholder tracks using external URLs since local files cannot be embedded.
-        const playlist = [
-            { title: "Ocean Breeze", artist: "Placeholder Track 1", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", isPlaceholder: true },
-            { title: "Ambient Journey", artist: "Placeholder Track 2", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", isPlaceholder: true },
-            { title: "Cinematic Build-up", artist: "Placeholder Track 3", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", isPlaceholder: true }
-        ];
-
-        // --- DOM Elements ---
-        const songTitleEl = document.getElementById('song-title');
-        const songArtistEl = document.getElementById('song-artist');
-        const playPauseBtn = document.getElementById('play-pause-btn');
-        const playIcon = document.getElementById('play-icon');
-        const pauseIcon = document.getElementById('pause-icon');
-        const prevBtn = document.getElementById('prev-btn');
-        const nextBtn = document.getElementById('next-btn');
-        const currentTimeEl = document.getElementById('current-time');
-        const durationEl = document.getElementById('duration');
-        const progressBarContainer = document.getElementById('progress-bar-container');
-        const progressBar = document.getElementById('progress-bar');
-        const fileInput = document.getElementById('audio-file-input');
-        const fileStatusEl = document.getElementById('file-status');
-        const albumIcon = document.getElementById('album-icon');
-        const volumeSlider = document.getElementById('volume-slider');
-
-
-        // --- Helper Functions ---
-
-        /**
-         * Formats seconds into a human-readable M:SS string.
-         * @param {number} seconds - Total seconds to format.
-         */
-        function formatTime(seconds) {
-            const minutes = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
-        }
-
-        /**
-         * Updates the UI (title, artist, and duration display).
-         * @param {object} track - The track object currently loaded.
-         */
-        function updateUI(track) {
-            songTitleEl.textContent = track.title;
-            songArtistEl.textContent = track.artist;
-            // Reset progress bar display
-            currentTimeEl.textContent = '0:00';
-            durationEl.textContent = '0:00';
-            progressBar.style.width = '0%';
-        }
-
-        // --- Core Player Functions ---
-
-        /**
-         * Loads and prepares a new track.
-         */
-        function loadTrack(track) {
-            audio.src = track.src;
-            audio.load();
-            updateUI(track);
-            
-            // Show album icon for placeholder tracks, hide otherwise
-            if (track.isPlaceholder) {
-                albumIcon.classList.remove('hidden');
-            } else {
-                albumIcon.classList.add('hidden'); 
+        if (file) {
+            // Revoke any previous URL to clean up memory
+            if (playlist[currentTrackIndex] && playlist[currentTrackIndex].objectURL) {
+                URL.revokeObjectURL(playlist[currentTrackIndex].objectURL);
             }
-        }
 
-        /**
-         * Toggles between play and pause states.
-         */
-        function togglePlayPause() {
-            if (audio.paused) {
-                // Attempt to play, catching potential autoplay errors
-                audio.play().catch(error => {
-                    console.error("Autoplay failed or player not ready:", error);
-                    fileStatusEl.textContent = "Playback blocked. Please interact with the player first.";
-                });
+            const objectURL = URL.createObjectURL(file);
+            const fileName = file.name;
+            const trackName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName; // Remove file extension
+            
+            const newTrack = {
+                title: trackName,
+                artist: 'Local File',
+                src: objectURL,
+                isPlaceholder: false,
+                objectURL: objectURL // Keep a reference to revoke later
+            };
+
+            // Replace the first item in the playlist (or prepend) with the new track
+            // Prepending ensures the loaded track is the one that gets played.
+            if (playlist.length > 0 && playlist[0].objectURL) {
+                // If the first track is a previously loaded local file, replace it.
+                playlist[0] = newTrack;
+            } else if (playlist.length > 0 && !playlist[0].isPlaceholder) {
+                // If it's a different local file, replace it.
+                playlist[0] = newTrack;
             } else {
-                audio.pause();
+                 // Otherwise, insert the new track at the beginning
+                playlist.unshift(newTrack); 
             }
-            isPlaying = !audio.paused;
+            
+            currentTrackIndex = 0; // Set index to the newly loaded track
+            loadTrack(playlist[currentTrackIndex]);
+            fileStatusEl.textContent = `File loaded: ${fileName}`;
+            
+            // Start playing the new track
+            audio.play().catch(error => {
+                 console.error("Autoplay failed:", error);
+                 fileStatusEl.textContent = "Playback started, but was blocked. Click play to begin.";
+                 isPlaying = false;
+                 updatePlayPauseIcon();
+            });
+            isPlaying = true;
             updatePlayPauseIcon();
+        } else {
+            fileStatusEl.textContent = "No file loaded.";
         }
+    });
 
-        /**
-         * Switches the current track to the next one in the playlist (loops).
-         */
-        function nextTrack() {
-            currentTrackIndex = (currentTrackIndex + 1) % playlist.length;
-            loadTrack(playlist[currentTrackIndex]);
-            if (isPlaying) {
-                audio.play();
-            }
-        }
+    // --- Initial Load ---
+    loadTrack(playlist[currentTrackIndex]);
+    updatePlayPauseIcon(); // Set initial icon state to 'Play'
+    fileStatusEl.textContent = 'Ready to load or play placeholder track.';
 
-        /**
-         * Switches the current track to the previous one in the playlist (loops).
-         */
-        function prevTrack() {
-            currentTrackIndex = (currentTrackIndex - 1 + playlist.length) % playlist.length;
-            loadTrack(playlist[currentTrackIndex]);
-            if (isPlaying) {
-                audio.play();
-            }
-        }
-
-        /**
-         * Updates the play/pause icon appearance.
-         */
-        function updatePlayPauseIcon() {
-            if (isPlaying) {
-                playIcon.style.display = 'none';
-                pauseIcon.style.display = 'block';
-            } else {
-                playIcon.style.display = 'block';
-                pauseIcon.style.display = 'none';
-            }
-        }
-
-
-        // --- Event Listeners and Audio Handling ---
-
-        // 1. Play/Pause Button
-        playPauseBtn.addEventListener('click', togglePlayPause);
-        
-        // 2. Next/Previous Buttons
-        nextBtn.addEventListener('click', nextTrack);
-        prevBtn.addEventListener('click', prevTrack);
-
-        // 3. Audio Time Updates (updates progress bar and time display)
-        audio.addEventListener('timeupdate', () => {
-            const duration = audio.duration;
-            const currentTime = audio.currentTime;
-
-            if (isFinite(duration) && duration > 0) {
-                const progressPercent = (currentTime / duration)
+</script>
