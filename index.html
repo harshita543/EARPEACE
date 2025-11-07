@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EarPeace: Advanced Music Player</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
-        /* Custom styles for progress bar and volume slider thumb (unchanged) */
+        /* Custom styles for progress bar and volume slider thumb */
         #progress-bar-container { height: 8px; background-color: #374151; border-radius: 9999px; cursor: pointer; }
         #progress-bar { height: 100%; width: 0%; background-color: #0EA5E9; border-radius: 9999px; transition: width 0.1s linear; }
         body { font-family: 'Inter', sans-serif; }
@@ -15,17 +17,17 @@
         #volume-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #0EA5E9; cursor: pointer; }
         #volume-slider::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #0EA5E9; cursor: pointer; }
         
-        /* NEW STYLES: For the two-column layout */
+        /* Two-column layout using CSS Grid (Adjusted for 2 columns since Reverb/Lyrics are now combined) */
         .grid-container {
             display: grid;
-            grid-template-columns: 1fr 3fr 1fr; /* Sidebar, Player, Lyrics */
-            gap: 1.5rem; /* Equivalent to space-x-6 */
+            grid-template-columns: 1fr 3fr; /* Sidebar, Player */
+            gap: 1.5rem;
         }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
 
-    <div class="grid-container w-full max-w-7xl">
+    <div class="grid-container w-full max-w-5xl">
 
         <aside id="sidebar" class="bg-gray-800 p-4 rounded-xl shadow-2xl overflow-y-auto max-h-[80vh]">
             <h2 class="text-xl font-bold mb-4 text-sky-400">🎶 Playlist</h2>
@@ -45,7 +47,7 @@
                 <label for="audio-file-input" class="cursor-pointer bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-6 rounded-xl shadow-lg transition duration-300 text-sm md:text-base">
                     Load Your Own MP3
                 </label>
-                <p id="file-status" class="mt-2 text-xs text-gray-400 italic">No file loaded.</p>
+                <p id="file-status" class="mt-2 text-xs text-gray-400 italic">Ready to load or play placeholder track.</p>
             </div>
 
             <div class="w-48 h-48 mx-auto bg-gray-700 rounded-xl mb-6 flex items-center justify-center shadow-inner overflow-hidden">
@@ -101,11 +103,6 @@
                 <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1" class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-sky-500">
             </div>
 
-            <div class="mt-4 flex items-center space-x-4">
-                <span class="text-sm text-gray-400 font-medium whitespace-nowrap">Reverb:</span>
-                <input type="range" id="reverb-slider" min="0" max="1" step="0.01" value="0" class="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500">
-            </div>
-            
             <div class="mt-6 flex justify-center">
                 <button id="add-to-fav-btn" class="flex items-center space-x-2 bg-pink-600 hover:bg-pink-700 text-white font-bold py-2 px-4 rounded-xl transition duration-300 transform active:scale-95 text-sm">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
@@ -114,15 +111,15 @@
                     <span>Add to Favorites</span>
                 </button>
             </div>
+            
+            <section id="lyrics-section" class="mt-8 pt-4 border-t border-gray-700">
+                <h2 class="text-xl font-bold mb-4 text-sky-400 text-center">📝 Lyrics</h2>
+                <div id="lyrics-content" class="text-gray-300 text-sm leading-relaxed max-h-48 overflow-y-auto p-2 bg-gray-700 rounded-lg">
+                    <p>No song loaded or lyrics unavailable.</p>
+                    <p class="mt-4 italic text-gray-500">Lyrics integration typically requires fetching data from an external API, which is not possible in this local snippet. Placeholder lyrics are displayed for the sample tracks.</p>
+                </div>
+            </section>
         </div>
-
-        <section id="lyrics-column" class="bg-gray-800 p-4 rounded-xl shadow-2xl overflow-y-auto max-h-[80vh]">
-            <h2 class="text-xl font-bold mb-4 text-sky-400">📝 Lyrics</h2>
-            <div id="lyrics-content" class="text-gray-300 text-sm leading-relaxed">
-                <p>No song loaded or lyrics unavailable.</p>
-                <p class="mt-4 italic text-gray-500">Lyrics integration typically requires fetching data from a dedicated server/API (e.g., Musixmatch or Genius), which cannot be done in a client-side code snippet like this. This column serves as a placeholder for that feature!</p>
-            </div>
-        </section>
         
     </div>
     
@@ -132,17 +129,16 @@
         let isPlaying = false;
         let currentTrackIndex = 0;
         
-        // NEW FEATURE: Web Audio API Context and Nodes for Sound Reverb
+        // Web Audio API Context and Nodes for Volume Control ONLY (Reverb removed)
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         let sourceNode; // The source of the audio (connects to the <audio> element)
-        let gainNode; // Volume control node (optional, but good practice)
-        let convolverNode; // The Reverb effect node
-        
+        let masterGainNode; // For the master volume control
+
         // Placeholder tracks. Added a 'isFavorite' flag and sample lyrics.
         const playlist = [
-            { title: "Ocean Breeze", artist: "Placeholder Track 1", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", isPlaceholder: true, isFavorite: false, lyrics: "The waves roll in and the tide goes out.\nA gentle rhythm, free from doubt.\nFeel the sand beneath your feet,\nThis ambient journey is oh so sweet." },
-            { title: "Ambient Journey", artist: "Placeholder Track 2", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", isPlaceholder: true, isFavorite: true, lyrics: "A quiet moment, a peaceful space.\nLost in the sound, finding grace.\nListen closely to the low drone,\nIn this vast world, you are not alone." },
-            { title: "Cinematic Build-up", artist: "Placeholder Track 3", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", isPlaceholder: true, isFavorite: false, lyrics: "The drums begin to escalate,\nA sense of destiny, sealed by fate.\nThe strings rise high, a powerful sound,\nThis is the moment, solid ground." }
+            { title: "Ocean Breeze", artist: "Placeholder Track 1", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", isPlaceholder: true, isLocalTemp: false, isFavorite: false, lyrics: "The waves roll in and the tide goes out.\nA gentle rhythm, free from doubt.\nFeel the sand beneath your feet,\nThis ambient journey is oh so sweet." },
+            { title: "Ambient Journey", artist: "Placeholder Track 2", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", isPlaceholder: true, isLocalTemp: false, isFavorite: true, lyrics: "A quiet moment, a peaceful space.\nLost in the sound, finding grace.\nListen closely to the low drone,\nIn this vast world, you are not alone." },
+            { title: "Cinematic Build-up", artist: "Placeholder Track 3", src: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", isPlaceholder: true, isLocalTemp: false, isFavorite: false, lyrics: "The drums begin to escalate,\nA sense of destiny, sealed by fate.\nThe strings rise high, a powerful sound,\nThis is the moment, solid ground." }
         ];
 
         // --- DOM Elements ---
@@ -161,12 +157,9 @@
         const fileStatusEl = document.getElementById('file-status');
         const albumIcon = document.getElementById('album-icon');
         const volumeSlider = document.getElementById('volume-slider');
-        
-        // NEW DOM ELEMENTS
         const playlistListEl = document.getElementById('playlist-list');
         const favoritesListEl = document.getElementById('favorites-list');
         const addToFavBtn = document.getElementById('add-to-fav-btn');
-        const reverbSlider = document.getElementById('reverb-slider');
         const lyricsContentEl = document.getElementById('lyrics-content');
 
 
@@ -174,10 +167,9 @@
         function formatTime(seconds) {
             const minutes = Math.floor(seconds / 60);
             const secs = Math.floor(seconds % 60);
-            return ${minutes}:${secs < 10 ? '0' : ''}${secs};
+            return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
         }
         
-        // NEW FEATURE: Render Playlist & Favorites
         function renderPlaylist() {
             playlistListEl.innerHTML = '';
             favoritesListEl.innerHTML = '';
@@ -185,26 +177,31 @@
             let favoriteCount = 0;
 
             playlist.forEach((track, index) => {
+                // Skip the temporary local file if it's not the currently playing track
+                if (track.isLocalTemp && index !== currentTrackIndex) return;
+
                 const item = document.createElement('div');
-                item.className = flex justify-between items-center p-2 rounded-lg cursor-pointer transition duration-150 ${index === currentTrackIndex ? 'bg-sky-700 font-bold' : 'hover:bg-gray-700'};
+                item.className = `flex justify-between items-center p-2 rounded-lg cursor-pointer transition duration-150 ${index === currentTrackIndex ? 'bg-sky-700 font-bold' : 'hover:bg-gray-700'}`;
                 item.innerHTML = `
                     <span class="text-sm truncate">${track.title}</span>
-                    <button data-index="${index}" class="play-track-btn text-xs text-sky-400 hover:text-white ml-2">Play</button>
                 `;
                 item.addEventListener('click', () => {
                     currentTrackIndex = index;
                     loadTrack(playlist[currentTrackIndex]);
-                    audio.play();
-                    isPlaying = true;
-                    updatePlayPauseIcon();
+                    togglePlayPause(true); 
                 });
                 
                 playlistListEl.appendChild(item);
                 
                 if (track.isFavorite) {
                     const favItem = document.createElement('div');
-                    favItem.className = p-2 rounded-lg text-sm truncate cursor-pointer hover:bg-gray-700;
-                    favItem.textContent = ${track.title} (${track.artist});
+                    favItem.className = 'p-2 rounded-lg text-sm truncate cursor-pointer hover:bg-gray-700';
+                    favItem.textContent = `${track.title} (${track.artist})`;
+                    favItem.addEventListener('click', () => {
+                        currentTrackIndex = index;
+                        loadTrack(playlist[currentTrackIndex]);
+                        togglePlayPause(true); 
+                    });
                     favoritesListEl.appendChild(favItem);
                     favoriteCount++;
                 }
@@ -215,7 +212,6 @@
             }
         }
         
-        // NEW FEATURE: Update UI to show track data and lyrics
         function updateUI(track) {
             songTitleEl.textContent = track.title;
             songArtistEl.textContent = track.artist;
@@ -223,7 +219,8 @@
             durationEl.textContent = '0:00';
             progressBar.style.width = '0%';
             
-            if (track.isPlaceholder) {
+            // Show icon if it's a placeholder or temporary local file
+            if (track.isPlaceholder || track.isLocalTemp) {
                 albumIcon.classList.remove('hidden');
             } else {
                 albumIcon.classList.add('hidden'); 
@@ -237,69 +234,64 @@
             // Update Lyrics column
             lyricsContentEl.innerHTML = track.lyrics.replace(/\n/g, '<br>');
             
-            renderPlaylist(); // Re-render playlist to highlight the current track
+            renderPlaylist(); 
         }
 
 
         // --- Core Player Functions ---
         
-        // NEW FEATURE: Init Web Audio API for effects (must run before first play)
+        // Initialize Web Audio API nodes for volume control
         function initWebAudio() {
             if (!sourceNode) {
                 // Connect the HTML audio element to the AudioContext
                 sourceNode = audioContext.createMediaElementSource(audio);
                 
-                // Create nodes for effects and volume
-                gainNode = audioContext.createGain();
-                convolverNode = audioContext.createConvolver();
-                
-                // Initialize convolver (load an impulse response for reverb)
-                // A simple placeholder impulse response. In a real app, this would be fetched.
-                // For simplicity, we are skipping the complex loading of a proper impulse response file (.wav)
-                // and just setting up the chain. For a real effect, this part is critical.
-                
-                // Connect the chain: Source -> Convolver (Reverb) -> Gain (Volume) -> Destination (Speakers)
-                sourceNode.connect(convolverNode);
-                convolverNode.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                // Set initial volume on the Web Audio Gain Node
-                gainNode.gain.value = volumeSlider.value;
-                
-                // Disable the effect initially by having the reverb gain at 0 and feeding the source directly
-                sourceNode.connect(audioContext.destination);
+                // Create a master gain node
+                masterGainNode = audioContext.createGain(); 
+
+                // Connect the chain: Source -> Master Gain -> Destination
+                sourceNode.connect(masterGainNode);
+                masterGainNode.connect(audioContext.destination);
+
+                // Set initial volume
+                masterGainNode.gain.value = volumeSlider.value;
             }
         }
-
+        
         function loadTrack(track) {
             audio.src = track.src;
             audio.load();
             updateUI(track);
-            // Ensure audio context is resumed on interaction (browser policy)
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
         }
 
-        function togglePlayPause() {
-            if (audio.paused) {
-                initWebAudio(); // Initialize audio chain on first play click
-                audio.play().catch(error => {
+        // Toggles play/pause, with a forcePlay option for track changes
+        function togglePlayPause(forcePlay = false) {
+            // CRITICAL FIX: Resume AudioContext on user interaction
+            if (audioContext.state === 'suspended') {
+                audioContext.resume().catch(error => console.error("Failed to resume AudioContext:", error));
+            }
+            
+            if (audio.paused || forcePlay) {
+                initWebAudio(); // Initialize audio chain
+                audio.play().then(() => {
+                    isPlaying = true;
+                    updatePlayPauseIcon();
+                }).catch(error => {
                     console.error("Autoplay failed or player not ready:", error);
-                    fileStatusEl.textContent = "Playback blocked. Please interact with the player first.";
+                    fileStatusEl.textContent = "Playback blocked. Please click play to begin.";
                 });
             } else {
                 audio.pause();
+                isPlaying = false;
+                updatePlayPauseIcon();
             }
-            isPlaying = !audio.paused;
-            updatePlayPauseIcon();
         }
 
         function nextTrack() {
             currentTrackIndex = (currentTrackIndex + 1) % playlist.length;
             loadTrack(playlist[currentTrackIndex]);
             if (isPlaying) {
-                audio.play();
+                togglePlayPause(true); 
             }
         }
 
@@ -307,7 +299,7 @@
             currentTrackIndex = (currentTrackIndex - 1 + playlist.length) % playlist.length;
             loadTrack(playlist[currentTrackIndex]);
             if (isPlaying) {
-                audio.play();
+                togglePlayPause(true); 
             }
         }
 
@@ -321,39 +313,21 @@
             }
         }
         
-        // NEW FEATURE: Toggles the Favorite status of the current track
         function toggleFavorite() {
             const currentTrack = playlist[currentTrackIndex];
             currentTrack.isFavorite = !currentTrack.isFavorite;
             updateUI(currentTrack);
         }
-        
-        // NEW FEATURE: Updates the reverb mix level
-        function updateReverb(value) {
-            // Note: Implementing a proper, adjustable reverb mix requires advanced routing
-            // (Source to Dry Gain -> Destination) AND (Source to Convolver -> Wet Gain -> Destination).
-            // For simplicity, this slider adjusts the main signal gain, which is not a true reverb mix.
-            // A professional implementation is complex and requires custom AudioBuffer sources (impulse responses).
-            
-            // For this demonstration, we'll just log the value and keep the initWebAudio setup.
-            console.log(Reverb mix set to: ${value});
-            fileStatusEl.textContent = Reverb mix level: ${value} (Requires a proper impulse response for full effect);
-        }
 
 
         // --- Event Listeners and Audio Handling ---
 
-        playPauseBtn.addEventListener('click', togglePlayPause);
+        playPauseBtn.addEventListener('click', () => togglePlayPause());
         nextBtn.addEventListener('click', nextTrack);
         prevBtn.addEventListener('click', prevTrack);
-        
-        // NEW FEATURE: Favorite Button Listener
         addToFavBtn.addEventListener('click', toggleFavorite);
         
-        // NEW FEATURE: Reverb Slider Listener
-        reverbSlider.addEventListener('input', (e) => {
-            updateReverb(e.target.value);
-        });
+        // Remove the reverb slider listener
 
         audio.addEventListener('timeupdate', () => {
             const duration = audio.duration;
@@ -361,7 +335,7 @@
 
             if (isFinite(duration) && duration > 0) {
                 const progressPercent = (currentTime / duration) * 100;
-                progressBar.style.width = ${progressPercent}%;
+                progressBar.style.width = `${progressPercent}%`;
                 currentTimeEl.textContent = formatTime(currentTime);
             }
         });
@@ -384,20 +358,30 @@
             }
         });
 
-        // Volume control now also updates the Web Audio Gain Node if it exists
         volumeSlider.addEventListener('input', (e) => {
-            audio.volume = e.target.value;
-            if (gainNode) {
-                gainNode.gain.value = e.target.value;
+            const volume = parseFloat(e.target.value);
+            audio.volume = volume; // Control HTML5 audio volume as a fallback/redundancy
+            
+            if (masterGainNode) {
+                // Control volume via the Web Audio master gain node
+                masterGainNode.gain.value = volume;
             }
         });
 
-        // FILE INPUT CHANGE (Unchanged logic for loading local file)
+        // CRITICAL FIX: File upload logic with cleanup and auto-play
         fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
 
             if (file) {
-                // (Cleanup logic omitted for brevity in the final JS block but remains essential)
+                // 1. CLEANUP: Remove old temporary local files from the playlist and revoke their URLs
+                const initialLength = playlist.length;
+                for (let i = initialLength - 1; i >= 0; i--) {
+                    if (playlist[i].isLocalTemp) {
+                        URL.revokeObjectURL(playlist[i].src); 
+                        playlist.splice(i, 1);
+                    }
+                }
+                
                 const objectURL = URL.createObjectURL(file);
                 const fileName = file.name;
                 const trackName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName; 
@@ -407,40 +391,29 @@
                     artist: 'Local File',
                     src: objectURL,
                     isPlaceholder: false,
-                    isFavorite: false, // New local files are not favorite by default
-                    lyrics: No lyrics available for local file: ${fileName}, // Placeholder lyrics
-                    objectURL: objectURL
+                    isLocalTemp: true, // Mark as temporary local file
+                    isFavorite: false,
+                    lyrics: `Local file: ${fileName}.\nNo lyrics available.`,
+                    objectURL: objectURL 
                 };
 
-                // Prepend or replace the first track
+                // 2. Insert the new local track at the beginning
                 playlist.unshift(newTrack); 
                 currentTrackIndex = 0; 
-                loadTrack(playlist[currentTrackIndex]);
-                fileStatusEl.textContent = File loaded: ${fileName};
                 
-                audio.play().catch(error => {
-                    console.error("Autoplay failed:", error);
-                    fileStatusEl.textContent = "Playback started, but was blocked. Click play to begin.";
-                    isPlaying = false;
-                    updatePlayPauseIcon();
-                });
-                isPlaying = true;
-                updatePlayPauseIcon();
-
-                // Simple list cleanup
-                if (playlist.length > 5) {
-                    playlist.splice(5);  
-                }
+                loadTrack(playlist[currentTrackIndex]);
+                fileStatusEl.textContent = `File loaded: ${fileName}`;
+                
+                // 3. Force Playback and resume AudioContext
+                togglePlayPause(true); 
             } else {
-                fileStatusEl.textContent = "No file loaded.";
+                fileStatusEl.textContent = "No file selected.";
             }
         });
 
         // --- Initial Load ---
         loadTrack(playlist[currentTrackIndex]);
         updatePlayPauseIcon();
-        fileStatusEl.textContent = 'Ready to load or play placeholder track.';
     </script>
 </body>
 </html>
-
